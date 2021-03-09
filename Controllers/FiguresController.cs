@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -16,7 +16,9 @@ namespace FiguresDotStore.Controllers
 	public static class FiguresStorage
 	{
 		// корректно сконфигурированный и готовый к использованию клиент Редиса
+		Почему сервис не инъектируется в контроллер ? 
 		private static IRedisClient RedisClient { get; }
+		
 	
 		public static bool CheckIfAvailable(string type, int count)
 		{
@@ -54,14 +56,19 @@ namespace FiguresDotStore.Controllers
 		public decimal GetTotal() =>
 			Positions.Select(p => p switch
 				{
-					Triangle => (decimal) p.GetArea() * 1.2m,
-					Circle => (decimal) p.GetArea() * 0.9m
+					Triangle _ => (decimal) p.GetArea() * 1.2m,
+					Для чего переход на decimal ?
+			
+					Circle _ => (decimal) p.GetArea() * 0.9m,
+					Не хватает обработки Square
+					
 				})
 				.Sum();
 	}
 
 	public abstract class Figure
 	{
+		Нужно перенсти размеры в потомков - они специфичны для каждой фигуры
 		public float SideA { get; set; }
 		public float SideB { get; set; }
 		public float SideC { get; set; }
@@ -79,6 +86,9 @@ namespace FiguresDotStore.Controllers
 			    && CheckTriangleInequality(SideB, SideA, SideC)
 			    && CheckTriangleInequality(SideC, SideB, SideA)) 
 				return;
+			Размеры могу быть отрицательнымими? 
+				
+			Здесь лучше не использовать исключение, проверку данных проводить до создание класса 
 			throw new InvalidOperationException("Triangle restrictions not met");
 		}
 
@@ -118,6 +128,8 @@ namespace FiguresDotStore.Controllers
 	public interface IOrderStorage
 	{
 		// сохраняет оформленный заказ и возвращает сумму
+		
+		У сервиса ответсвеность и сохранить и посчитать сумму ? 
 		Task<decimal> Save(Order order);
 	}
 	
@@ -140,12 +152,20 @@ namespace FiguresDotStore.Controllers
 		{
 			foreach (var position in cart.Positions)
 			{
+				1.Нужно сделать проверку свободности и обновление в одной транзакции
+					
+				2. position.Count может быть отрицательным или 0 
+				3. если position.Type == null ? 
 				if (!FiguresStorage.CheckIfAvailable(position.Type, position.Count))
 				{
 					return new BadRequestResult();
 				}
 			}
 
+			cart.Positions может быть == null 
+				
+				
+			
 			var order = new Order
 			{
 				Positions = cart.Positions.Select(p =>
@@ -155,23 +175,31 @@ namespace FiguresDotStore.Controllers
 						"Circle" => new Circle(),
 						"Triangle" => new Triangle(),
 						"Square" => new Square()
+						// нет обработки некоретных данных
 					};
 					figure.SideA = p.SideA;
 					figure.SideB = p.SideB;
 					figure.SideC = p.SideC;
+					
+					
 					figure.Validate();
 					return figure;
 				}).ToList()
 			};
 
+			
 			foreach (var position in cart.Positions)
 			{
+				Если после проверки кто то уже успел зарезервироть?
 				FiguresStorage.Reserve(position.Type, position.Count);
 			}
 
 			var result = _orderStorage.Save(order);
 
 			return new OkObjectResult(result.Result);
+			
+			
+			Лучше перекомпоновать - отельно подготовку/валидацию данных, потом в транзанции проверку на свободность и сохранение
 		}
 	}
 }
